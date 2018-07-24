@@ -10,6 +10,11 @@ const componentInfoContext = require.context(
 const keys = componentInfoContext.keys()
 const infoObjects = keys.map(componentInfoContext)
 
+componentInfoContext.byAPIPath = infoObjects.reduce((acc, next) => {
+  acc[next.apiPath] = next
+  return acc
+}, {})
+
 componentInfoContext.byDisplayName = infoObjects.reduce((acc, next) => {
   acc[next.displayName] = next
   return acc

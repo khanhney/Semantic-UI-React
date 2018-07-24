@@ -3,10 +3,10 @@ import copyToClipboard from 'copy-to-clipboard'
 import { html } from 'js-beautify'
 import _ from 'lodash'
 import PropTypes from 'prop-types'
-import React, { PureComponent, createElement, isValidElement } from 'react'
+import React, { createElement, isValidElement, PureComponent } from 'react'
 import { withRouter } from 'react-router'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Divider, Grid, Menu, Visibility } from 'semantic-ui-react'
+import { Divider, Grid, Menu, Segment, Visibility } from 'semantic-ui-react'
 
 import {
   exampleContext,
@@ -15,7 +15,7 @@ import {
   repoURL,
   scrollToAnchor,
 } from 'docs/src/utils'
-import Editor from 'docs/src/components/Editor/Editor'
+import Editor, { EDITOR_BACKGROUND_COLOR } from 'docs/src/components/Editor/Editor'
 import ComponentControls from '../ComponentControls'
 import ComponentExampleTitle from './ComponentExampleTitle'
 import CarbonAdNative from '../../CarbonAd/CarbonAdNative'
@@ -41,14 +41,21 @@ const childrenStyle = {
 }
 
 const errorStyle = {
-  padding: '1em',
   fontSize: '0.9rem',
-  color: '#a33',
-  background: '#fff2f2',
+  fontFamily: 'monospace',
+  whiteSpace: 'pre',
 }
 
-const controlsWrapperStyle = {
-  minHeight: '3rem',
+const htmlAreaStyle = {
+  padding: '1rem',
+  filter: 'grayscale()',
+}
+const htmlDividerStyle = {
+  opacity: 0.5,
+}
+
+const renderedExampleStyle = {
+  padding: '2rem',
 }
 
 /**
@@ -117,7 +124,6 @@ class ComponentExample extends PureComponent {
 
   updateHash = () => {
     if (this.isActiveState()) this.setHashAndScroll()
-    else if (this.isActiveHash()) this.removeHash()
   }
 
   setHashAndScroll = () => {
@@ -185,13 +191,18 @@ class ComponentExample extends PureComponent {
   }
 
   resetJSX = () => {
-    const { sourceCode } = this.state
-    const original = this.getOriginalSourceCode()
     // eslint-disable-next-line no-alert
-    if (sourceCode !== original && confirm('Lose your changes?')) {
-      this.setState({ sourceCode: original })
+    if (this.hasOriginalCodeChanged() && confirm('Lose your changes?')) {
+      this.setState({ sourceCode: this.getOriginalSourceCode() })
       this.renderSourceCode()
     }
+  }
+
+  hasOriginalCodeChanged = () => {
+    const { sourceCode } = this.state
+    const original = this.getOriginalSourceCode()
+
+    return sourceCode !== original
   }
 
   getOriginalSourceCode = () => {
@@ -310,61 +321,56 @@ class ComponentExample extends PureComponent {
     }
   }, 100)
 
-  getComponentName = () => this.props.examplePath.split('/')[1]
-
   handleChangeCode = (sourceCode) => {
     this.setState({ sourceCode }, this.renderSourceCode)
   }
 
-  setGitHubHrefs = () => {
+  renderJSXControls = () => {
     const { examplePath } = this.props
-
-    if (this.ghEditHref && this.ghBugHref) return
+    const { copiedCode } = this.state
 
     // get component name from file path:
     // elements/Button/Types/ButtonButtonExample
     const pathParts = examplePath.split(__PATH_SEP__)
     const filename = pathParts[pathParts.length - 1]
 
-    this.ghEditHref = [
+    const ghEditHref = [
       `${repoURL}/edit/master/docs/src/examples/${examplePath}.js`,
       `?message=docs(${filename}): your description`,
     ].join('')
-  }
 
-  renderJSXControls = () => {
-    const { copiedCode, error } = this.state
+    const codeEditorStyle = {
+      position: 'absolute',
+      margin: 0,
+      top: '2px',
+      right: '0.5rem',
+      zIndex: 1,
+    }
 
-    this.setGitHubHrefs()
-
-    const color = error ? 'red' : 'black'
     return (
-      <Divider horizontal fitted>
-        <Menu text>
-          <Menu.Item
-            active={copiedCode || !!error} // to show the color
-            color={copiedCode ? 'green' : color}
-            onClick={this.copyJSX}
-            icon={!copiedCode && 'copy'}
-            content={copiedCode ? 'Copied!' : 'Copy'}
-          />
-          <Menu.Item
-            active={!!error} // to show the color
-            color={color}
-            icon='refresh'
-            content='Reset'
-            onClick={this.resetJSX}
-          />
-          <Menu.Item
-            active={!!error} // to show the color
-            color={color}
-            icon='github'
-            content='Edit'
-            href={this.ghEditHref}
-            target='_blank'
-          />
-        </Menu>
-      </Divider>
+      <Menu size='small' secondary inverted text style={codeEditorStyle}>
+        <Menu.Item
+          style={
+            this.hasOriginalCodeChanged() ? undefined : { opacity: 0.5, pointerEvents: 'none' }
+          }
+          icon='refresh'
+          content='Reset'
+          onClick={this.resetJSX}
+        />
+        <Menu.Item
+          active={copiedCode} // to show the color
+          icon={copiedCode ? { color: 'green', name: 'check' } : 'copy'}
+          content='Copy'
+          onClick={this.copyJSX}
+        />
+        <Menu.Item
+          style={{ border: 'none' }}
+          icon='github'
+          content='Edit'
+          href={ghEditHref}
+          target='_blank'
+        />
+      </Menu>
     )
   }
 
@@ -372,9 +378,8 @@ class ComponentExample extends PureComponent {
     const { error, showCode, sourceCode } = this.state
     if (!showCode) return
 
-    const style = { width: '100%' }
-    if (error) {
-      style.boxShadow = `inset 0 0 0 1em ${errorStyle.background}`
+    const style = {
+      position: 'relative',
     }
 
     return (
@@ -385,7 +390,11 @@ class ComponentExample extends PureComponent {
           value={sourceCode}
           onChange={this.handleChangeCode}
         />
-        {error && <pre style={errorStyle}>{error}</pre>}
+        {error && (
+          <Segment color='red' basic secondary inverted style={errorStyle}>
+            {error}
+          </Segment>
+        )}
       </div>
     )
   }
@@ -407,8 +416,10 @@ class ComponentExample extends PureComponent {
     })
 
     return (
-      <div>
-        <Divider horizontal>Rendered HTML</Divider>
+      <div style={htmlAreaStyle}>
+        <Divider inverted horizontal style={htmlDividerStyle}>
+          HTML
+        </Divider>
         <Editor
           id={`${this.getKebabExamplePath()}-html`}
           mode='html'
@@ -461,44 +472,48 @@ class ComponentExample extends PureComponent {
           onMouseMove={handleMouseMove}
           style={exampleStyle}
         >
-          <Grid.Row>
-            <Grid.Column width={12}>
-              <ComponentExampleTitle
-                description={description}
-                title={title}
-                suiVersion={suiVersion}
-              />
-            </Grid.Column>
-            <Grid.Column textAlign='right' width={4} style={controlsWrapperStyle}>
-              <ComponentControls
-                anchorName={this.anchorName}
-                examplePath={examplePath}
-                onCopyLink={this.handleDirectLinkClick}
-                onShowCode={this.handleShowCodeClick}
-                onShowHTML={this.handleShowHTMLClick}
-                showCode={showCode}
-                showHTML={showHTML}
-                visible={isActive || isHovering}
-              />
-            </Grid.Column>
-          </Grid.Row>
+          <Grid.Column width={12}>
+            <ComponentExampleTitle
+              description={description}
+              title={title}
+              suiVersion={suiVersion}
+            />
+          </Grid.Column>
+          <Grid.Column textAlign='right' width={4}>
+            <ComponentControls
+              anchorName={this.anchorName}
+              examplePath={examplePath}
+              onCopyLink={this.handleDirectLinkClick}
+              onShowCode={this.handleShowCodeClick}
+              onShowHTML={this.handleShowHTMLClick}
+              showCode={showCode}
+              showHTML={showHTML}
+            />
+          </Grid.Column>
 
           {children && (
-            <Grid.Row columns={1}>
-              <Grid.Column style={childrenStyle}>{children}</Grid.Column>
-            </Grid.Row>
+            <Grid.Column width={16} style={childrenStyle}>
+              {children}
+            </Grid.Column>
           )}
 
-          <Grid.Row columns={1}>
-            <Grid.Column className={`rendered-example ${this.getKebabExamplePath()}`}>
-              {exampleElement}
-            </Grid.Column>
-            <Grid.Column>
+          <Grid.Column
+            width={16}
+            className={`rendered-example ${this.getKebabExamplePath()}`}
+            style={renderedExampleStyle}
+          >
+            {exampleElement}
+          </Grid.Column>
+          {(showCode || showHTML) && (
+            <Grid.Column
+              width={16}
+              style={{ padding: '1rem 0 0', background: EDITOR_BACKGROUND_COLOR }}
+            >
               {this.renderJSX()}
               {this.renderHTML()}
             </Grid.Column>
-          </Grid.Row>
-          {isActive && <CarbonAdNative />}
+          )}
+          {isActive && <CarbonAdNative inverted={this.isActiveState()} />}
         </Grid>
       </Visibility>
     )
